@@ -1,0 +1,21 @@
+{
+  "name": "TCMS – Training Centre Monitoring System",
+  "short_name": "TCMS",
+  "description": "Smart India Hackathon SIH26245 Training Centre Monitoring & Compliance System",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0047AB",
+  "icons": [
+    {
+      "src": "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=192",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=512",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

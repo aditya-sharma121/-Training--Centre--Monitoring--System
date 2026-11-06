@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  tcms-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tcms-monitoring-system
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=file:./dev.db
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=tcms-super-secret-sih26245-key-2026
+      - NEXT_PUBLIC_ENABLE_AI_FEATURES=true
+    restart: unless-stopped

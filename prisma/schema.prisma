@@ -1,0 +1,325 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  role          String    @default("TRAINER") // SUPER_ADMIN, DISTRICT_OFFICER, CENTRE_MANAGER, TRAINER, STUDENT
+  phone         String?
+  avatar        String?
+  district      String?   // For District Officers
+  state         String?
+  centreId      String?   // Linked centre for Manager/Trainer/Student
+  centre        Centre?   @relation(fields: [centreId], references: [id], onDelete: SetNull)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  trainerProfile   Trainer?
+  studentProfile   Student?
+  inspectionsRun   Inspection[]   @relation("InspectorUser")
+  auditLogs        AuditLog[]
+  notifications    Notification[]
+  resolvedAlerts   Alert[]        @relation("AlertResolver")
+
+  @@index([role])
+  @@index([centreId])
+}
+
+model Centre {
+  id                String    @id @default(cuid())
+  code              String    @unique // e.g. "TC-RJ-JPR-001"
+  name              String
+  address           String
+  district          String
+  state             String
+  pincode           String
+  latitude          Float
+  longitude         Float
+  geoRadiusMeters   Float     @default(200.0) // Geofence radius in meters
+  capacity          Int       @default(100)
+  contactEmail      String
+  contactPhone      String
+  status            String    @default("APPROVED") // APPROVED, PENDING, SUSPENDED, REJECTED
+  affiliationNumber String?
+  complianceScore   Float     @default(85.0)
+  complianceGrade   String    @default("COMPLIANT") // EXCELLENT, COMPLIANT, PARTIAL, CRITICAL
+  photos            String?   // JSON array of image URLs
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  users             User[]
+  trainers          Trainer[]
+  students          Student[]
+  batches           Batch[]
+  inspections       Inspection[]
+  trainerAttendance TrainerAttendance[]
+  alerts            Alert[]
+
+  @@index([state, district])
+  @@index([status])
+  @@index([complianceScore])
+}
+
+model Course {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  name            String
+  sector          String   // e.g. "Electronics", "IT-ITeS", "Healthcare", "Apparel"
+  durationMonths  Int      @default(3)
+  createdAt       DateTime @default(now())
+  batches         Batch[]
+}
+
+model Batch {
+  id           String       @id @default(cuid())
+  code         String       @unique
+  name         String
+  courseId     String
+  course       Course       @relation(fields: [courseId], references: [id])
+  centreId     String
+  centre       Centre       @relation(fields: [centreId], references: [id], onDelete: Cascade)
+  trainerId    String?
+  trainer      Trainer?     @relation(fields: [trainerId], references: [id])
+  startDate    DateTime
+  endDate      DateTime
+  timing       String       // e.g. "09:00 AM - 01:00 PM"
+  maxStudents  Int          @default(30)
+  status       String       @default("ONGOING") // UPCOMING, ONGOING, COMPLETED
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  students     Student[]
+  attendance   StudentAttendance[]
+  alerts       Alert[]
+
+  @@index([centreId])
+  @@index([trainerId])
+}
+
+model Trainer {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  centreId        String
+  centre          Centre   @relation(fields: [centreId], references: [id], onDelete: Cascade)
+  employeeCode    String   @unique
+  specialization  String
+  qualification   String
+  experienceYears Int      @default(2)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  batches         Batch[]
+  attendances     TrainerAttendance[]
+
+  @@index([centreId])
+}
+
+model Student {
+  id             String    @id @default(cuid())
+  userId         String?   @unique
+  user           User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  centreId       String
+  centre         Centre    @relation(fields: [centreId], references: [id], onDelete: Cascade)
+  batchId        String
+  batch          Batch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  registrationNo String    @unique
+  name           String
+  fatherName     String?
+  gender         String    @default("Other")
+  phone          String?
+  email          String?
+  dob            DateTime?
+  address        String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  attendance     StudentAttendance[]
+
+  @@index([centreId])
+  @@index([batchId])
+}
+
+model StudentAttendance {
+  id                 String   @id @default(cuid())
+  studentId          String
+  student            Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  batchId            String
+  batch              Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  date               DateTime
+  status             String   @default("PRESENT") // PRESENT, ABSENT, LATE, LEAVE
+  markedByUserId     String
+  markedAt           DateTime @default(now())
+  verificationMethod String   @default("MANUAL")  // MANUAL, QR_SCAN, FACE_AI, BIOMETRIC
+  geoLatitude        Float?
+  geoLongitude       Float?
+  isGeoValid         Boolean  @default(true)
+  editLocked         Boolean  @default(false)
+  lockedAt           DateTime?
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([studentId, date])
+  @@index([batchId, date])
+  @@index([date])
+}
+
+model TrainerAttendance {
+  id                 String   @id @default(cuid())
+  trainerId          String
+  trainer            Trainer  @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  centreId           String
+  centre             Centre   @relation(fields: [centreId], references: [id], onDelete: Cascade)
+  date               DateTime
+  checkInTime        DateTime?
+  checkOutTime       DateTime?
+  checkInLat         Float?
+  checkInLng         Float?
+  checkOutLat        Float?
+  checkOutLng        Float?
+  isCheckInGeoValid  Boolean  @default(true)
+  isCheckOutGeoValid Boolean  @default(true)
+  checkInSelfieUrl   String?
+  status             String   @default("PRESENT") // PRESENT, ABSENT, HALF_DAY, LATE
+  lateMinutes        Int      @default(0)
+  earlyExitMinutes   Int      @default(0)
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([trainerId, date])
+  @@index([centreId, date])
+  @@index([date])
+}
+
+model ChecklistItem {
+  id          String   @id @default(cuid())
+  category    String   // e.g. "Classrooms", "IT Lab", "Fire Safety", "Toilets", "CCTV", "Power Backup"
+  title       String
+  description String
+  weight      Float    @default(1.0)
+  maxScore    Float    @default(10.0)
+  mandatory   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  responses   InspectionResponse[]
+}
+
+model Inspection {
+  id              String   @id @default(cuid())
+  centreId        String
+  centre          Centre   @relation(fields: [centreId], references: [id], onDelete: Cascade)
+  inspectorId     String
+  inspector       User     @relation("InspectorUser", fields: [inspectorId], references: [id])
+  type            String   @default("OFFICER_VERIFICATION") // "SELF_ASSESSMENT", "OFFICER_VERIFICATION"
+  status          String   @default("SUBMITTED") // DRAFT, SUBMITTED, REVIEWED
+  conductedDate   DateTime @default(now())
+  totalScore      Float    @default(0.0)
+  complianceGrade String   @default("COMPLIANT") // EXCELLENT, COMPLIANT, PARTIAL, CRITICAL
+  remarks         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  responses       InspectionResponse[]
+  evidences       Evidence[]
+
+  @@index([centreId])
+  @@index([conductedDate])
+}
+
+model InspectionResponse {
+  id              String        @id @default(cuid())
+  inspectionId    String
+  inspection      Inspection    @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  checklistItemId String
+  checklistItem   ChecklistItem @relation(fields: [checklistItemId], references: [id])
+  status          String        // COMPLIANT, PARTIALLY_COMPLIANT, NON_COMPLIANT
+  scoreAwarded    Float         @default(0.0)
+  remarks         String?
+  createdAt       DateTime      @default(now())
+
+  evidences       Evidence[]
+
+  @@unique([inspectionId, checklistItemId])
+}
+
+model Evidence {
+  id                   String              @id @default(cuid())
+  inspectionId         String
+  inspection           Inspection          @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  inspectionResponseId String?
+  inspectionResponse   InspectionResponse? @relation(fields: [inspectionResponseId], references: [id], onDelete: SetNull)
+  photoUrl             String
+  latitude             Float?
+  longitude            Float?
+  capturedAt           DateTime            @default(now())
+  itemTag              String?             // e.g. "FIRE_EXTINGUISHER", "LAB_COMPUTERS"
+  verifiedByAi         Boolean             @default(false)
+  aiDetectionResult    String?             // JSON string
+  createdAt            DateTime            @default(now())
+}
+
+model Alert {
+  id                String    @id @default(cuid())
+  centreId          String
+  centre            Centre    @relation(fields: [centreId], references: [id], onDelete: Cascade)
+  batchId           String?
+  batch             Batch?    @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  ruleType          String    // LOW_STUDENT_ATTENDANCE, TRAINER_ABSENT, LOW_COMPLIANCE_SCORE, CHECKLIST_OVERDUE
+  severity          String    @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  title             String
+  description       String
+  status            String    @default("OPEN")   // OPEN, ACKNOWLEDGED, RESOLVED, ESCALATED
+  escalatedToUserId String?
+  escalatedAt       DateTime?
+  resolvedAt        DateTime?
+  resolvedByUserId  String?
+  resolvedByUser    User?     @relation("AlertResolver", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  resolutionNotes   String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([centreId])
+  @@index([severity, status])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  link      String?
+  type      String   @default("INFO")
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String   // "ATTENDANCE_EDIT", "INSPECTION_SUBMIT", "ALERT_RESOLVE"
+  entityType String   // "StudentAttendance", "Inspection", "Alert"
+  entityId   String
+  oldValues  String?  // JSON
+  newValues  String?  // JSON
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+}
